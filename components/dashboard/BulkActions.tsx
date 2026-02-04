@@ -53,8 +53,7 @@ export function BulkActions({ selectedEmails, onClear }: BulkActionsProps) {
     } catch (error) {
       setMessage({
         type: "error",
-        text:
-          error instanceof Error ? error.message : "Failed to send emails. Please try again.",
+        text: error instanceof Error ? error.message : "Failed to send emails. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -96,18 +95,16 @@ export function BulkActions({ selectedEmails, onClear }: BulkActionsProps) {
         </div>
 
         {message && (
-          <div className={`flex items-center gap-3 rounded-lg border p-3 ${messageBgs[message.type]}`}>
+          <div
+            className={`flex items-center gap-3 rounded-lg border p-3 ${messageBgs[message.type]}`}
+          >
             {messageIcons[message.type]}
             <p className="text-sm">{message.text}</p>
           </div>
         )}
 
         <div className="flex gap-2">
-          <Button
-            onClick={handleSendInitialEmail}
-            disabled={loading}
-            className="gap-2"
-          >
+          <Button onClick={handleSendInitialEmail} disabled={loading} className="gap-2">
             {loading ? <LoadingSpinner /> : <Send className="h-4 w-4" />}
             Send Initial Email
           </Button>

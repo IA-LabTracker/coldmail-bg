@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Email } from "@/types";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Navbar } from "@/components/Navbar";
 import { KPICards } from "@/components/dashboard/KPICards";
 import { EmailFilters } from "@/components/dashboard/EmailFilters";
@@ -35,78 +34,20 @@ export default function DashboardPage() {
   const [campaignFilter, setCampaignFilter] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
 
-  const { selectedIds, selectedEmails, isAllSelected, toggleEmailSelection, toggleSelectAllVisible, clearSelection } =
-    useEmailSelection(emails);
+  const {
+    selectedIds,
+    selectedEmails,
+    isAllSelected,
+    toggleEmailSelection,
+    toggleSelectAllVisible,
+    clearSelection,
+  } = useEmailSelection(emails);
 
   // Fetch emails
-  useEffect(() => {
+  const fetchEmails = useCallback(async () => {
     if (!user) return;
-
-    const fetchEmails = async () => {
-      setLoading(true);
-      setError("");
-
-      try {
-        const { data, error: fetchError } = await supabase
-          .from("emails")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("date_sent", { ascending: false });
-
-        if (fetchError) throw fetchError;
-        setEmails(data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load emails");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEmails();
-  }, [user]);
-
-  // Apply filters
-  const filteredEmails = useMemo(() => {
-    let filtered = [...emails];
-
-    if (statusFilter) {
-      filtered = filtered.filter((e) => e.status === statusFilter);
-    }
-
-    if (classificationFilter) {
-      filtered = filtered.filter((e) => e.lead_classification === classificationFilter);
-    }
-
-    if (campaignFilter) {
-      filtered = filtered.filter((e) =>
-        e.campaign_name.toLowerCase().includes(campaignFilter.toLowerCase()),
-      );
-    }
-
-    if (searchFilter) {
-      const search = searchFilter.toLowerCase();
-      filtered = filtered.filter(
-        (e) => e.company.toLowerCase().includes(search) || e.email.toLowerCase().includes(search),
-      );
-    }
-
-    return filtered;
-  }, [emails, statusFilter, classificationFilter, campaignFilter, searchFilter]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
-  const paginatedEmails = filteredEmails.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  );
-
-  const handleViewDetails = (email: Email) => {
-    setSelectedDetailEmail(email);
-    setDetailModalOpen(true);
-  };
-
-  const handleUpdateEmail = async () => {
-    if (!user) return;
+    setLoading(true);
+    setError("");
 
     try {
       const { data, error: fetchError } = await supabase
@@ -118,11 +59,69 @@ export default function DashboardPage() {
       if (fetchError) throw fetchError;
       setEmails(data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to refresh emails");
+      setError(err instanceof Error ? err.message : "Failed to load emails");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user]);
 
-  const handleToggleExpand = (id: string) => {
+  useEffect(() => {
+    fetchEmails();
+  }, [fetchEmails]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, classificationFilter, campaignFilter, searchFilter]);
+
+  // Apply filters
+  const filteredEmails = useMemo(() => {
+    let filtered = emails;
+
+    if (statusFilter) {
+      filtered = filtered.filter((e) => e.status === statusFilter);
+    }
+
+    if (classificationFilter) {
+      filtered = filtered.filter((e) => e.lead_classification === classificationFilter);
+    }
+
+    if (campaignFilter) {
+      const lowerCampaign = campaignFilter.toLowerCase();
+      filtered = filtered.filter((e) =>
+        e.campaign_name.toLowerCase().includes(lowerCampaign),
+      );
+    }
+
+    if (searchFilter) {
+      const lowerSearch = searchFilter.toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          e.company.toLowerCase().includes(lowerSearch) ||
+          e.email.toLowerCase().includes(lowerSearch),
+      );
+    }
+
+    return filtered;
+  }, [emails, statusFilter, classificationFilter, campaignFilter, searchFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
+  const paginatedEmails = useMemo(
+    () =>
+      filteredEmails.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE,
+      ),
+    [filteredEmails, currentPage],
+  );
+
+  const handleViewDetails = useCallback((email: Email) => {
+    setSelectedDetailEmail(email);
+    setDetailModalOpen(true);
+  }, []);
+
+  const handleToggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -132,10 +131,10 @@ export default function DashboardPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <div className="min-h-screen bg-gray-50">
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -166,10 +165,7 @@ export default function DashboardPage() {
               </div>
 
               {selectedEmails.length > 0 && (
-                <BulkActions
-                  selectedEmails={selectedEmails}
-                  onClear={clearSelection}
-                />
+                <BulkActions selectedEmails={selectedEmails} onClear={clearSelection} />
               )}
 
               <div className="rounded-lg border border-gray-200 bg-white">
@@ -207,12 +203,12 @@ export default function DashboardPage() {
                 email={selectedDetailEmail}
                 open={detailModalOpen}
                 onOpenChange={setDetailModalOpen}
-                onUpdate={handleUpdateEmail}
+                onUpdate={fetchEmails}
               />
             </>
           )}
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

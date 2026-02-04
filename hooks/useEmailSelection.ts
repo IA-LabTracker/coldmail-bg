@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Email } from "@/types";
 
 export function useEmailSelection(emails: Email[]) {
@@ -7,12 +7,9 @@ export function useEmailSelection(emails: Email[]) {
   useEffect(() => {
     const emailIds = new Set(emails.map((e) => e.id));
     setSelectedIds((prev) => {
-      const filtered = new Set(prev);
-      prev.forEach((id) => {
-        if (!emailIds.has(id)) {
-          filtered.delete(id);
-        }
-      });
+      const hasStale = Array.from(prev).some((id) => !emailIds.has(id));
+      if (!hasStale) return prev;
+      const filtered = new Set(Array.from(prev).filter((id) => emailIds.has(id)));
       return filtered;
     });
   }, [emails]);
@@ -57,7 +54,10 @@ export function useEmailSelection(emails: Email[]) {
     setSelectedIds(new Set());
   }, []);
 
-  const selectedEmails = emails.filter((e) => selectedIds.has(e.id));
+  const selectedEmails = useMemo(
+    () => emails.filter((e) => selectedIds.has(e.id)),
+    [emails, selectedIds],
+  );
 
   return {
     selectedIds,

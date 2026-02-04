@@ -14,11 +14,7 @@ interface TemplateStepProps {
 
 const variables = ["firstName", "lastName", "company", "position"];
 
-export function TemplateStep({
-  template,
-  onTemplateChange,
-  firstLead,
-}: TemplateStepProps) {
+export function TemplateStep({ template, onTemplateChange, firstLead }: TemplateStepProps) {
   const insertVariable = (variable: string) => {
     onTemplateChange(template + `{{${variable}}}`);
   };

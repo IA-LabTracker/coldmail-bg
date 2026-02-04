@@ -35,12 +35,12 @@ export function EmailFilters({
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div>
         <label className="block text-sm font-medium text-gray-700">Status</label>
-        <Select value={status} onValueChange={onStatusChange}>
+        <Select value={status || "all"} onValueChange={(v) => onStatusChange(v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Statuses</SelectItem>
+            <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="sent">Sent</SelectItem>
             <SelectItem value="replied">Replied</SelectItem>
             <SelectItem value="bounced">Bounced</SelectItem>
@@ -50,12 +50,12 @@ export function EmailFilters({
 
       <div>
         <label className="block text-sm font-medium text-gray-700">Classification</label>
-        <Select value={classification} onValueChange={onClassificationChange}>
+        <Select value={classification || "all"} onValueChange={(v) => onClassificationChange(v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Classifications</SelectItem>
+            <SelectItem value="all">All Classifications</SelectItem>
             <SelectItem value="hot">Hot</SelectItem>
             <SelectItem value="warm">Warm</SelectItem>
             <SelectItem value="cold">Cold</SelectItem>

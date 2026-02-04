@@ -65,7 +65,10 @@ export function UploadStep({ leads, onLeadsChange }: UploadStepProps) {
         {errors.length > 0 && (
           <div className="space-y-2">
             {errors.map((error, idx) => (
-              <div key={idx} className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+              <div
+                key={idx}
+                className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3"
+              >
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <p className="text-sm text-red-800">{error}</p>
               </div>
@@ -76,14 +79,11 @@ export function UploadStep({ leads, onLeadsChange }: UploadStepProps) {
         {leads.length === 0 ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Upload a CSV file with the following columns: firstName, lastName, company, position, linkedinUrl
+              Upload a CSV file with the following columns: firstName, lastName, company, position,
+              linkedinUrl
             </p>
 
-            <Input
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-            />
+            <Input type="file" accept=".csv" onChange={handleFileUpload} />
           </div>
         ) : (
           <div className="space-y-4">
@@ -132,9 +132,7 @@ export function UploadStep({ leads, onLeadsChange }: UploadStepProps) {
             </div>
 
             {leads.length > 5 && (
-              <p className="text-xs text-gray-500">
-                Showing first 5 of {leads.length} leads
-              </p>
+              <p className="text-xs text-gray-500">Showing first 5 of {leads.length} leads</p>
             )}
           </div>
         )}

@@ -62,14 +62,10 @@ export function Navbar() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogTitle>Sign Out</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to sign out?
-                </AlertDialogDescription>
+                <AlertDialogDescription>Are you sure you want to sign out?</AlertDialogDescription>
                 <div className="flex gap-3">
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleSignOut}>
-                    Sign Out
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={handleSignOut}>Sign Out</AlertDialogAction>
                 </div>
               </AlertDialogContent>
             </AlertDialog>

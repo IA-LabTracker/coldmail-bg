@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:\\\\projetos\\\\coldmail-bg\" show --name-status HEAD)",
+      "Bash(git clone:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "WebFetch(domain:www.unipile.com)",
+      "Bash(npx next build:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

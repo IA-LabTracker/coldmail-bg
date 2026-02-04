@@ -50,8 +50,10 @@ export function EmailTable({
   onViewDetails,
   isAllSelected,
 }: EmailTableProps) {
-  const getStatusColor = (status: string) => statusColors[status] || { bg: "bg-gray-100", text: "text-gray-800" };
-  const getClassificationColor = (classification: string) => classificationColors[classification] || { bg: "bg-gray-100", text: "text-gray-800" };
+  const getStatusColor = (status: string) =>
+    statusColors[status] || { bg: "bg-gray-100", text: "text-gray-800" };
+  const getClassificationColor = (classification: string) =>
+    classificationColors[classification] || { bg: "bg-gray-100", text: "text-gray-800" };
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -115,17 +117,11 @@ export function EmailTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-gray-700">{email.campaign_name || "-"}</TableCell>
-              <TableCell className="text-gray-700">
-                {formatDateOnly(email.date_sent)}
-              </TableCell>
+              <TableCell className="text-gray-700">{formatDateOnly(email.date_sent)}</TableCell>
               <TableCell>
                 <div className="flex gap-1">
                   {(email.city || email.phone || email.address) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onToggleExpand(email.id)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => onToggleExpand(email.id)}>
                       {expandedIds.has(email.id) ? (
                         <ChevronUp className="h-4 w-4" />
                       ) : (

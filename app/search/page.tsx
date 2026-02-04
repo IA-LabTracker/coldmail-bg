@@ -1,33 +1,53 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Settings } from "@/types";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, CheckCircle, Loader, AlertTriangle } from "lucide-react";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { AlertCircle, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
 
-type Status = "idle" | "running" | "completed" | "error";
+type SubmitStatus = "idle" | "running" | "completed" | "error";
+
+const searchSchema = z.object({
+  region: z.string().min(1, "Region is required"),
+  industry: z.string().min(1, "Industry is required"),
+  keywords: z.string().min(1, "Keywords are required"),
+  campaignName: z.string().optional(),
+});
+
+type SearchFormValues = z.infer<typeof searchSchema>;
 
 export default function SearchPage() {
   const { user } = useAuth();
-  const [region, setRegion] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [keywords, setKeywords] = useState("");
-  const [campaignName, setCampaignName] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [message, setMessage] = useState("");
-  const [webhookConfigured, setWebhookConfigured] = useState(true);
+  const [webhookConfigured, setWebhookConfigured] = useState<boolean | null>(null);
+
+  const form = useForm<SearchFormValues>({
+    resolver: zodResolver(searchSchema),
+    defaultValues: { region: "", industry: "", keywords: "", campaignName: "" },
+  });
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
 
     const checkWebhook = async () => {
       const { data } = await supabase
@@ -36,15 +56,17 @@ export default function SearchPage() {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      setWebhookConfigured(!!data?.webhook_url);
+      if (!cancelled) {
+        setWebhookConfigured(!!data?.webhook_url);
+      }
     };
 
     checkWebhook();
+    return () => { cancelled = true; };
   }, [user]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setStatus("running");
+  const onSubmit = async (values: SearchFormValues) => {
+    setSubmitStatus("running");
     setMessage("");
 
     try {
@@ -60,41 +82,31 @@ export default function SearchPage() {
         throw new Error("Webhook URL not configured. Please configure it in Settings.");
       }
 
-      const keywordsArray = keywords.split(",").map((k) => k.trim());
+      const keywordsArray = values.keywords.split(",").map((k) => k.trim());
 
       await axios.post(settings.webhook_url, {
-        region,
-        industry,
+        region: values.region,
+        industry: values.industry,
         keywords: keywordsArray,
-        campaign: campaignName,
+        campaign: values.campaignName,
       });
 
-      setStatus("completed");
-      setMessage(`Campaign "${campaignName || "Untitled"}" triggered successfully!`);
+      setSubmitStatus("completed");
+      setMessage(`Campaign "${values.campaignName || "Untitled"}" triggered successfully!`);
 
       setTimeout(() => {
-        setStatus("idle");
-        setRegion("");
-        setIndustry("");
-        setKeywords("");
-        setCampaignName("");
+        setSubmitStatus("idle");
         setMessage("");
+        form.reset();
       }, 3000);
     } catch (error) {
-      setStatus("error");
+      setSubmitStatus("error");
       setMessage(error instanceof Error ? error.message : "Failed to trigger campaign");
     }
   };
 
-  const statusConfig = {
-    idle: { icon: null, color: "" },
-    running: { icon: <Loader className="h-5 w-5 animate-spin" />, color: "text-blue-600" },
-    completed: { icon: <CheckCircle className="h-5 w-5" />, color: "text-green-600" },
-    error: { icon: <AlertCircle className="h-5 w-5" />, color: "text-red-600" },
-  };
-
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <div className="min-h-screen bg-gray-50">
         <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -103,7 +115,7 @@ export default function SearchPage() {
             <p className="mt-2 text-gray-600">Trigger n8n webhook to search for leads</p>
           </div>
 
-          {!webhookConfigured && (
+          {webhookConfigured === false && (
             <div className="flex items-center gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
               <AlertTriangle className="h-5 w-5 text-yellow-600" />
               <p className="text-sm text-yellow-800">
@@ -115,102 +127,125 @@ export default function SearchPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label htmlFor="region" className="block text-sm font-medium text-gray-700">
-                    Region *
-                  </label>
-                  <Input
-                    id="region"
-                    type="text"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                    placeholder="e.g., Brazil, USA, Europe"
-                    required
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Campaign Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="region"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Region</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Brazil, USA, Europe" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <div>
-                  <label htmlFor="industry" className="block text-sm font-medium text-gray-700">
-                    Industry *
-                  </label>
-                  <Input
-                    id="industry"
-                    type="text"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                    placeholder="e.g., Tech, Finance, Healthcare"
-                    required
+                  <FormField
+                    control={form.control}
+                    name="industry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Industry</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Tech, Finance, Healthcare" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <div>
-                  <label htmlFor="keywords" className="block text-sm font-medium text-gray-700">
-                    Keywords (comma-separated) *
-                  </label>
-                  <Textarea
-                    id="keywords"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    placeholder="e.g., automation, CRM, SaaS"
-                    required
-                    className="min-h-20"
+                  <FormField
+                    control={form.control}
+                    name="keywords"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Keywords (comma-separated)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="e.g., automation, CRM, SaaS"
+                            className="min-h-20"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <div>
-                  <label htmlFor="campaign" className="block text-sm font-medium text-gray-700">
-                    Campaign Name
-                  </label>
-                  <Input
-                    id="campaign"
-                    type="text"
-                    value={campaignName}
-                    onChange={(e) => setCampaignName(e.target.value)}
-                    placeholder="Give your campaign a name (optional)"
+                  <FormField
+                    control={form.control}
+                    name="campaignName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Campaign Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Give your campaign a name (optional)"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {message && (
-              <div
-                className={`flex items-center gap-3 rounded-lg border p-4 ${
-                  status === "error"
-                    ? "border-red-200 bg-red-50"
-                    : status === "completed"
-                      ? "border-green-200 bg-green-50"
-                      : "border-blue-200 bg-blue-50"
-                }`}
-              >
-                {status === "running" && <Loader className="h-5 w-5 animate-spin text-blue-600" />}
-                {status === "completed" && <CheckCircle className="h-5 w-5 text-green-600" />}
-                {status === "error" && <AlertCircle className="h-5 w-5 text-red-600" />}
-                <p
-                  className={
-                    status === "error" ? "text-red-800" : status === "completed" ? "text-green-800" : "text-blue-800"
-                  }
+              {message && (
+                <div
+                  className={`flex items-center gap-3 rounded-lg border p-4 ${
+                    submitStatus === "error"
+                      ? "border-red-200 bg-red-50"
+                      : submitStatus === "completed"
+                        ? "border-green-200 bg-green-50"
+                        : "border-blue-200 bg-blue-50"
+                  }`}
                 >
-                  {message}
-                </p>
-              </div>
-            )}
+                  {submitStatus === "running" && (
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                  )}
+                  {submitStatus === "completed" && (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  )}
+                  {submitStatus === "error" && (
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                  )}
+                  <p
+                    className={
+                      submitStatus === "error"
+                        ? "text-red-800"
+                        : submitStatus === "completed"
+                          ? "text-green-800"
+                          : "text-blue-800"
+                    }
+                  >
+                    {message}
+                  </p>
+                </div>
+              )}
 
-            <Button
-              type="submit"
-              disabled={status === "running" || !webhookConfigured}
-              className="w-full"
-            >
-              {status === "running" ? <LoadingSpinner /> : "Trigger Campaign"}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                disabled={submitStatus === "running" || webhookConfigured !== true}
+                className="w-full"
+              >
+                {submitStatus === "running" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Trigger Campaign"
+                )}
+              </Button>
+            </form>
+          </Form>
 
-          {/* How it works */}
           <Card className="border-gray-200">
             <CardHeader>
               <CardTitle>How It Works</CardTitle>
@@ -258,6 +293,6 @@ export default function SearchPage() {
           </Card>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

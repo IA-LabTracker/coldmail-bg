@@ -76,9 +76,15 @@ export function ExpandableRow({ email }: ExpandableRowProps) {
                 <div className="col-span-2">
                   <p className="mb-1 text-gray-500">CC Emails</p>
                   <div className="space-y-1">
-                    {email.cc_email_1 && <p className="font-medium text-gray-900">{email.cc_email_1}</p>}
-                    {email.cc_email_2 && <p className="font-medium text-gray-900">{email.cc_email_2}</p>}
-                    {email.cc_email_3 && <p className="font-medium text-gray-900">{email.cc_email_3}</p>}
+                    {email.cc_email_1 && (
+                      <p className="font-medium text-gray-900">{email.cc_email_1}</p>
+                    )}
+                    {email.cc_email_2 && (
+                      <p className="font-medium text-gray-900">{email.cc_email_2}</p>
+                    )}
+                    {email.cc_email_3 && (
+                      <p className="font-medium text-gray-900">{email.cc_email_3}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -92,7 +98,10 @@ export function ExpandableRow({ email }: ExpandableRowProps) {
           </div>
 
           {/* Replies & Tags */}
-          {(email.lead_category || email.client_tag || email.reply_we_got || email.our_last_reply) && (
+          {(email.lead_category ||
+            email.client_tag ||
+            email.reply_we_got ||
+            email.our_last_reply) && (
             <div>
               <h4 className="mb-3 flex items-center gap-2 font-medium text-gray-900">
                 <Tag className="h-4 w-4" />

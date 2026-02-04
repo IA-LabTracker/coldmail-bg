@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { LinkedInLead, Settings } from "@/types";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { LinkedInLead } from "@/types";
 import { Navbar } from "@/components/Navbar";
 import { ConnectionStep } from "@/components/linkedin/ConnectionStep";
 import { UploadStep } from "@/components/linkedin/UploadStep";
@@ -13,7 +12,7 @@ import { CampaignSettingsStep } from "@/components/linkedin/CampaignSettingsStep
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { AlertCircle, CheckCircle, Send } from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2, Send } from "lucide-react";
 import axios from "axios";
 
 type SubmitStatus = "idle" | "submitting" | "success" | "error";
@@ -27,42 +26,82 @@ export default function LinkedInPage() {
   const [delaySeconds, setDelaySeconds] = useState(90);
   const [maxLeads, setMaxLeads] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [polling, setPolling] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const pollingRef = useRef(false);
 
+  const fetchAccountId = useCallback(async () => {
+    if (!user) return null;
+
+    const { data } = await supabase
+      .from("settings")
+      .select("linkedin_account_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    return data?.linkedin_account_id || null;
+  }, [user]);
+
+  // Initial load + detect OAuth redirect
   useEffect(() => {
     if (!user) return;
 
-    const fetchSettings = async () => {
+    const init = async () => {
       setLoading(true);
 
-      try {
-        const { data } = await supabase
-          .from("settings")
-          .select("linkedin_account_id, linkedin_webhook_url")
-          .eq("user_id", user.id)
-          .maybeSingle();
+      const id = await fetchAccountId();
+      setAccountId(id);
+      setLoading(false);
 
-        setAccountId(data?.linkedin_account_id || null);
-      } catch (error) {
-        console.error("Failed to fetch settings", error);
-      } finally {
-        setLoading(false);
+      // If returning from OAuth, start polling for the account_id
+      // (Unipile sends it via notify_url webhook which saves to Supabase)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("connected") === "true" && !id) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setPolling(true);
+        pollingRef.current = true;
+      } else if (params.has("connected")) {
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
     };
 
-    fetchSettings();
+    init();
+  }, [user, fetchAccountId]);
 
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") === "true") {
-      params.delete("connected");
-      window.history.replaceState({}, document.title, window.location.pathname);
-      fetchSettings();
-    }
-  }, [user]);
+  // Poll Supabase for linkedin_account_id after OAuth redirect
+  useEffect(() => {
+    if (!polling || !user) return;
+
+    pollingRef.current = true;
+
+    const interval = setInterval(async () => {
+      if (!pollingRef.current) return;
+
+      const id = await fetchAccountId();
+      if (id) {
+        setAccountId(id);
+        setPolling(false);
+        pollingRef.current = false;
+      }
+    }, 2000);
+
+    // Stop polling after 60 seconds
+    const timeout = setTimeout(() => {
+      setPolling(false);
+      pollingRef.current = false;
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+      pollingRef.current = false;
+    };
+  }, [polling, user, fetchAccountId]);
 
   const handleSubmit = async () => {
     if (!user || !accountId || leads.length === 0 || !template || !campaignName) {
+      setSubmitStatus("error");
       setSubmitMessage("Please complete all steps first");
       return;
     }
@@ -81,17 +120,21 @@ export default function LinkedInPage() {
         throw new Error("LinkedIn webhook URL not configured in Settings");
       }
 
+      const selectedLeads = maxLeads > 0 ? leads.slice(0, maxLeads) : leads;
+
       await axios.post(settings.linkedin_webhook_url, {
         userId: user.id,
         linkedinAccountId: accountId,
-        leads,
+        leads: selectedLeads,
         messageTemplate: template,
         delaySeconds,
         campaignName,
       });
 
       setSubmitStatus("success");
-      setSubmitMessage("Campaign submitted successfully!");
+      setSubmitMessage(
+        `Campaign submitted! ${selectedLeads.length} leads will be processed.`,
+      );
 
       setTimeout(() => {
         setLeads([]);
@@ -105,31 +148,42 @@ export default function LinkedInPage() {
     } catch (error) {
       setSubmitStatus("error");
       setSubmitMessage(
-        error instanceof Error ? error.message : "Failed to submit campaign"
+        error instanceof Error ? error.message : "Failed to submit campaign",
       );
     }
   };
 
   if (loading) {
     return (
-      <ProtectedRoute>
+      <>
         <Navbar />
         <div className="flex justify-center py-12">
           <LoadingSpinner />
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <div className="min-h-screen bg-gray-50">
         <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">LinkedIn Campaign</h1>
-            <p className="mt-2 text-gray-600">Create and manage LinkedIn outreach campaigns</p>
+            <p className="mt-2 text-gray-600">
+              Connect your LinkedIn, upload leads and send personalized DMs
+            </p>
           </div>
+
+          {polling && (
+            <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              <p className="text-sm text-blue-800">
+                Waiting for LinkedIn connection confirmation...
+              </p>
+            </div>
+          )}
 
           {submitMessage && (
             <div
@@ -145,21 +199,14 @@ export default function LinkedInPage() {
               {submitStatus === "success" && (
                 <CheckCircle className="h-5 w-5 text-green-600" />
               )}
-              <p
-                className={
-                  submitStatus === "error" ? "text-red-800" : "text-green-800"
-                }
-              >
+              <p className={submitStatus === "error" ? "text-red-800" : "text-green-800"}>
                 {submitMessage}
               </p>
             </div>
           )}
 
           <div className="space-y-4">
-            <ConnectionStep
-              accountId={accountId}
-              onAccountIdChange={setAccountId}
-            />
+            <ConnectionStep accountId={accountId} onAccountIdChange={setAccountId} />
 
             {accountId && (
               <>
@@ -208,6 +255,6 @@ export default function LinkedInPage() {
           </div>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

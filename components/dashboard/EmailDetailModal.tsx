@@ -1,15 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Email } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/formatDate";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -21,8 +19,15 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { ErrorMessage } from "@/components/shared/ErrorMessage";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 interface EmailDetailModalProps {
   email: Email | null;
@@ -37,37 +42,40 @@ const statusColors: Record<string, { bg: string; text: string }> = {
   bounced: { bg: "bg-red-100", text: "text-red-800" },
 };
 
-const classificationColors: Record<string, { bg: string; text: string }> = {
-  hot: { bg: "bg-red-100", text: "text-red-800" },
-  warm: { bg: "bg-yellow-100", text: "text-yellow-800" },
-  cold: { bg: "bg-blue-100", text: "text-blue-800" },
-};
+const editSchema = z.object({
+  classification: z.enum(["hot", "warm", "cold"]),
+  notes: z.string().optional(),
+});
 
-export function EmailDetailModal({
-  email,
-  open,
-  onOpenChange,
-  onUpdate,
-}: EmailDetailModalProps) {
-  const [classification, setClassification] = useState<string>(
-    email?.lead_classification || "cold",
-  );
-  const [notes, setNotes] = useState(email?.notes || "");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+type EditFormValues = z.infer<typeof editSchema>;
+
+export function EmailDetailModal({ email, open, onOpenChange, onUpdate }: EmailDetailModalProps) {
+  const form = useForm<EditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      classification: (email?.lead_classification as "hot" | "warm" | "cold") || "cold",
+      notes: email?.notes || "",
+    },
+  });
+
+  useEffect(() => {
+    if (email) {
+      form.reset({
+        classification: (email.lead_classification as "hot" | "warm" | "cold") || "cold",
+        notes: email.notes || "",
+      });
+    }
+  }, [email, form]);
 
   if (!email) return null;
 
-  const handleSave = async () => {
-    setLoading(true);
-    setError("");
-
+  const onSubmit = async (values: EditFormValues) => {
     try {
       const { error: updateError } = await supabase
         .from("emails")
         .update({
-          lead_classification: classification as any,
-          notes,
+          lead_classification: values.classification as any,
+          notes: values.notes,
         })
         .eq("id", email.id);
 
@@ -76,9 +84,9 @@ export function EmailDetailModal({
       onUpdate();
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save changes");
-    } finally {
-      setLoading(false);
+      form.setError("root", {
+        message: err instanceof Error ? err.message : "Failed to save changes",
+      });
     }
   };
 
@@ -90,7 +98,12 @@ export function EmailDetailModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          {error && <ErrorMessage message={error} />}
+          {form.formState.errors.root && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {form.formState.errors.root.message}
+            </div>
+          )}
 
           {/* Basic Info */}
           <Card>
@@ -202,7 +215,10 @@ export function EmailDetailModal({
           )}
 
           {/* Email Configuration */}
-          {(email.sender_email || email.prospect_cc_email || email.cc_email_1 || email.bcc_email_1) && (
+          {(email.sender_email ||
+            email.prospect_cc_email ||
+            email.cc_email_1 ||
+            email.bcc_email_1) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Email Configuration</CardTitle>
@@ -318,46 +334,74 @@ export function EmailDetailModal({
             <CardHeader>
               <CardTitle className="text-base">Edit Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Lead Classification
-                </label>
-                <Select value={classification} onValueChange={setClassification}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hot">Hot</SelectItem>
-                    <SelectItem value="warm">Warm</SelectItem>
-                    <SelectItem value="cold">Cold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="classification"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Lead Classification</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="hot">Hot</SelectItem>
+                            <SelectItem value="warm">Warm</SelectItem>
+                            <SelectItem value="cold">Cold</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Notes</label>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes about this lead..."
-                  className="min-h-24"
-                />
-              </div>
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Add notes about this lead..."
+                            className="min-h-24"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <div className="flex gap-2">
-                <Button onClick={handleSave} disabled={loading} className="flex-1">
-                  {loading ? <LoadingSpinner /> : "Save"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={loading}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={form.formState.isSubmitting}
+                      className="flex-1"
+                    >
+                      {form.formState.isSubmitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Save"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                      disabled={form.formState.isSubmitting}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Form>
             </CardContent>
           </Card>
         </div>
